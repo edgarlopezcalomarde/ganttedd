@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, Plus, Trash2 } from 'lucide-react'
+import { Settings, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import {
   getViewRangeFromTasks,
@@ -30,7 +30,7 @@ const COLUMN_WIDTHS = {
   startDate: 110,
   endDate: 110,
   status: 110,
-  delete: 40
+  actions: 80
 }
 
 const FIXED_COLUMNS_WIDTH = Object.values(COLUMN_WIDTHS).reduce((a, b) => a + b, 0)
@@ -46,6 +46,7 @@ export default function GanttView() {
     addTask,
     updateTask,
     deleteTask,
+    moveTask,
     searchTerm,
     statusFilter,
     confirmDeleteTask
@@ -80,8 +81,23 @@ export default function GanttView() {
       result = result.filter((t) => t.status === statusFilter)
     }
 
+    // Ordenar por el campo order dentro de cada proyecto
+    result = result.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
     return result
   }, [tasks, selectedProjectId, searchTerm, statusFilter])
+
+  // Para obtener el índice real de una tarea en su proyecto (sin filtros)
+  const getTaskIndexInProject = (taskId, projectId) => {
+    const projectTasks = tasks
+      .filter(t => t.projectId === projectId)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    return projectTasks.findIndex(t => t.id === taskId)
+  }
+
+  const getProjectTasksCount = (projectId) => {
+    return tasks.filter(t => t.projectId === projectId).length
+  }
 
   // Para month y year: escalar dayWidth para rellenar el panel si el contenido es más estrecho
   const optimalDayWidth = useMemo(() => {
@@ -240,7 +256,7 @@ export default function GanttView() {
               <div className="flex items-center px-3 font-semibold text-xs text-pink-900 border-r border-pink-200 overflow-hidden truncate" style={{ width: COLUMN_WIDTHS.status }}>
                 Estado
               </div>
-              <div className="flex items-center px-3 font-semibold text-xs text-pink-900" style={{ width: COLUMN_WIDTHS.delete }} />
+              <div className="flex items-center px-3 font-semibold text-xs text-pink-900" style={{ width: COLUMN_WIDTHS.actions }} />
             </div>
           </div>
 
@@ -265,7 +281,11 @@ export default function GanttView() {
                   </motion.div>
 
                   {/* TASK ROWS */}
-                  {projTasks.map((task, taskIdx) => (
+                  {projTasks.map((task, taskIdx) => {
+                    const taskIndexInProject = getTaskIndexInProject(task.id, task.projectId)
+                    const projectTasksCount = getProjectTasksCount(task.projectId)
+
+                    return (
                     <motion.div
                       key={task.id}
                       initial={{ x: -20, opacity: 0 }}
@@ -326,7 +346,23 @@ export default function GanttView() {
                         </select>
                       </div>
 
-                      <div className="flex items-center justify-center" style={{ width: COLUMN_WIDTHS.delete }}>
+                      <div className="flex items-center justify-center gap-1" style={{ width: COLUMN_WIDTHS.actions }}>
+                        <button
+                          onClick={() => moveTask(task.id, 'up')}
+                          disabled={taskIndexInProject === 0}
+                          className="p-1 text-pink-400 hover:text-pink-600 hover:bg-pink-100 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Mover arriba"
+                        >
+                          <ChevronUp size={16} />
+                        </button>
+                        <button
+                          onClick={() => moveTask(task.id, 'down')}
+                          disabled={taskIndexInProject === projectTasksCount - 1}
+                          className="p-1 text-pink-400 hover:text-pink-600 hover:bg-pink-100 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Mover abajo"
+                        >
+                          <ChevronDown size={16} />
+                        </button>
                         <button
                           onClick={() => {
                             if (confirmDeleteTask ? confirm('¿Eliminar esta tarea?') : true) {
@@ -340,7 +376,8 @@ export default function GanttView() {
                         </button>
                       </div>
                     </motion.div>
-                  ))}
+                    )
+                  })}
                 </div>
               )
             })}

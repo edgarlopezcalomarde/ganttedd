@@ -52,18 +52,25 @@ export const useStore = create(
 
       // Task Actions
       addTask: (projectId, fields) =>
-        set((state) => ({
-          tasks: [
-            ...state.tasks,
-            {
-              id: crypto.randomUUID(),
-              projectId,
-              status: 'todo',
-              description: '',
-              ...fields
-            }
-          ]
-        })),
+        set((state) => {
+          const projectTasks = state.tasks.filter(t => t.projectId === projectId)
+          const maxOrder = projectTasks.length > 0
+            ? Math.max(...projectTasks.map(t => t.order ?? 0))
+            : 0
+          return {
+            tasks: [
+              ...state.tasks,
+              {
+                id: crypto.randomUUID(),
+                projectId,
+                order: maxOrder + 1,
+                status: 'todo',
+                description: '',
+                ...fields
+              }
+            ]
+          }
+        }),
 
       updateTask: (id, patches) =>
         set((state) => ({
@@ -76,6 +83,38 @@ export const useStore = create(
         set((state) => ({
           tasks: state.tasks.filter((t) => t.id !== id)
         })),
+
+      moveTask: (taskId, direction) =>
+        set((state) => {
+          const task = state.tasks.find(t => t.id === taskId)
+          if (!task) return state
+
+          const projectTasks = state.tasks
+            .filter(t => t.projectId === task.projectId)
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
+          const currentPos = projectTasks.findIndex(t => t.id === taskId)
+          if (direction === 'up' && currentPos === 0) return state
+          if (direction === 'down' && currentPos === projectTasks.length - 1) return state
+
+          const swapPos = direction === 'up' ? currentPos - 1 : currentPos + 1
+          const newOrder = projectTasks.map((_, idx) => idx)
+
+          // Intercambiar posiciones en newOrder
+          ;[newOrder[currentPos], newOrder[swapPos]] = [newOrder[swapPos], newOrder[currentPos]]
+
+          const newTasks = state.tasks.map(t => {
+            if (t.projectId === task.projectId) {
+              const taskPos = projectTasks.findIndex(pt => pt.id === t.id)
+              if (taskPos !== -1) {
+                return { ...t, order: newOrder[taskPos] }
+              }
+            }
+            return t
+          })
+
+          return { tasks: newTasks }
+        }),
 
       // Modal Actions
       openProjectModal: (project = null) =>
